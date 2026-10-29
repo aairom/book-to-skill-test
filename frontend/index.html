@@ -68,6 +68,50 @@
     #health-dot.ok  { background: var(--success); }
     #health-dot.err { background: var(--error); }
 
+    /* ── LLM status badge ────────────────────────────────────────────── */
+    #llm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: .72rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 20px;
+      color: var(--muted);
+      cursor: default;
+      user-select: none;
+      transition: border-color .3s, background .3s;
+    }
+    #llm-badge[data-state="ok"] {
+      border-color: rgba(76,175,80,.45);
+      background: rgba(76,175,80,.08);
+      color: var(--text);
+    }
+    #llm-badge[data-state="err"] {
+      border-color: rgba(244,67,54,.40);
+      background: rgba(244,67,54,.07);
+      color: var(--text);
+    }
+    #llm-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background .3s;
+    }
+    #llm-badge[data-state="ok"]  #llm-dot { background: var(--success); }
+    #llm-badge[data-state="err"] #llm-dot { background: var(--error); }
+    #llm-badge[data-state="checking"] #llm-dot {
+      background: var(--warn);
+      animation: llm-pulse 1s ease-in-out infinite;
+    }
+    @keyframes llm-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .25; }
+    }
+
     /* ── Layout ─────────────────────────────────────────────────────── */
     main {
       flex: 1;
@@ -519,6 +563,11 @@
 <header>
   <span class="logo">📚</span>
   <h1>Book-to-<span>Skill</span></h1>
+  <!-- LLM status badge — updated every 30 s by checkLlmStatus() -->
+  <span id="llm-badge" data-state="checking" title="LLM availability — click to recheck">
+    <span id="llm-dot"></span>
+    <span id="llm-label">LLM…</span>
+  </span>
   <span class="badge"><span id="health-dot"></span><span id="health-label">connecting…</span></span>
 </header>
 
@@ -848,6 +897,44 @@ async function checkHealth() {
   } catch {
     dot.className = 'err';
     lbl.textContent = 'offline';
+  }
+}
+
+// ─── LLM status badge ────────────────────────────────────────────────────────
+
+/**
+ * Probe GET /api/llm/status and update the header LLM badge.
+ *
+ * States
+ *   checking  – orange pulsing dot, "LLM…"      (in-flight / initial)
+ *   ok        – green dot, model name            (LLM reachable + model loaded)
+ *   err       – red dot, "LLM offline"           (server down or model missing)
+ */
+async function checkLlmStatus() {
+  const badge = document.getElementById('llm-badge');
+  const lbl   = document.getElementById('llm-label');
+  if (!badge || !lbl) return;
+
+  badge.dataset.state = 'checking';
+  lbl.textContent = 'LLM…';
+
+  try {
+    const d = await apiFetch('/api/llm/status');
+    if (d.available) {
+      badge.dataset.state = 'ok';
+      // Show the model name, truncated to 22 chars to fit header
+      const modelShort = d.model.length > 22 ? d.model.slice(0, 20) + '…' : d.model;
+      lbl.textContent = modelShort;
+      badge.title = `LLM online · ${d.model} · ${d.base_url}\nLast checked: ${new Date(d.checked_at).toLocaleTimeString()}`;
+    } else {
+      badge.dataset.state = 'err';
+      lbl.textContent = 'LLM offline';
+      badge.title = `LLM unreachable · model: ${d.model} · ${d.base_url}\nCheck LLM_BASE_URL / LLM_MODEL in .env\nLast checked: ${new Date(d.checked_at).toLocaleTimeString()}`;
+    }
+  } catch (err) {
+    badge.dataset.state = 'err';
+    lbl.textContent = 'LLM offline';
+    badge.title = `Could not reach /api/llm/status: ${err.message}`;
   }
 }
 
@@ -1705,6 +1792,14 @@ function updateSelectedInfo() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 checkHealth();
+
+// LLM status: probe on load, then every 30 s.
+checkLlmStatus();
+setInterval(checkLlmStatus, 30_000);
+
+// Click-to-recheck: let the user manually trigger a probe at any time.
+document.getElementById('llm-badge').addEventListener('click', checkLlmStatus);
+
 // Load input/ folder on startup via the API default
 apiFetch('/api/files').then(d => {
   loadDirectory(d.directory);

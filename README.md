@@ -64,7 +64,8 @@ cd book-to-skill-test
 # 2. Copy env config (edit LLM_BASE_URL / LLM_MODEL if needed)
 cp .env.example .env
 
-# 3. Place a book file in input/
+# 3. Place a book file in input/  — or use the bundled sample:
+#    input/sample/introduction-to-python.txt  (ready to use, no extra steps)
 cp ~/mybook.pdf input/
 
 # 4. Start the application (installs deps + clones book-to-skill automatically)
@@ -86,6 +87,8 @@ book-to-skill-test/
 ├── frontend/
 │   └── index.html           # Single-page UI (vanilla JS, no build step)
 ├── input/                   # Place book files here (synced, contents ignored)
+│   └── sample/
+│       └── introduction-to-python.txt  # Bundled sample file for quick testing
 ├── output/                  # Per-job artefacts (synced, contents ignored)
 │   └── <job_id>/
 │       ├── full_text.txt    # Extracted book text
@@ -103,7 +106,7 @@ book-to-skill-test/
 │   ├── stop.sh              # Graceful shutdown
 │   └── cleanup.sh           # Remove build artefacts
 ├── tests/
-│   └── test_api.py          # 49 pytest tests (API + skill generator)
+│   └── test_api.py          # 51 pytest tests (API + skill generator + LLM status)
 ├── Docs/
 │   ├── Quickstart.md        # Detailed setup + LLM configuration guide
 │   └── Architecture.md      # Two-phase pipeline diagram & design notes
@@ -120,6 +123,7 @@ book-to-skill-test/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/health` | Health check |
+| `GET` | `/api/llm/status` | Probe LLM availability — returns `available`, `model`, `base_url`, `checked_at` |
 | `GET` | `/api/files?directory=…` | List supported files in a directory |
 | `GET` | `/api/directories?directory=…` | List subdirectories for navigation |
 | `POST` | `/api/process` | Start an extraction + skill-generation job |

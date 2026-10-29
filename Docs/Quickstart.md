@@ -51,18 +51,19 @@ LLM_TIMEOUT=120                          # seconds per LLM request (increase for
 
 ### 3. Add sample files
 
-Place any supported book file in the `input/` directory:
+A ready-to-use sample is already included:
+
+```
+input/sample/introduction-to-python.txt
+```
+
+Open the UI, navigate to the `sample/` subdirectory in the file browser, and select that file.
+
+To use your own book, place any supported format in `input/`:
 
 ```bash
 cp ~/Downloads/mybook.pdf input/
 # or EPUB, DOCX, TXT, Markdown, etc.
-```
-
-For a quick test without a real book you can use any plain-text file:
-
-```bash
-printf "Chapter 1\n\nThis is the first chapter.\n\nChapter 2\n\nThis is the second chapter.\n" \
-  > input/sample.txt
 ```
 
 ---
@@ -233,12 +234,13 @@ To also remove the cloned library:
 # Activate the virtual environment
 source .venv/bin/activate
 
-# Run all 49 tests
+# Run all 51 tests
 pytest tests/ -v
 ```
 
 The test suite covers:
 - All REST API endpoints (file browser, upload, process, jobs, output, dependencies)
+- `/api/llm/status` — LLM availability probe (both `available=true` and `available=false`)
 - Skill generation API endpoints (`/api/jobs/{id}/skill`, download)
 - Skill generator unit tests (stub output, LLM generation, slugify, path traversal)
 - `_resolve_skill_dir` disk-scan fallback and auto-heal behaviour
@@ -254,7 +256,10 @@ The test suite covers:
 | PDF extraction empty | Install `poppler-utils` or `pypdf` |
 | Scanned PDF returns no text | Run `ocrmypdf input.pdf output.pdf` first |
 | Server log shows import error | Run `uv pip install -r requirements.txt` in `.venv` |
-| Skill generation stays "running" | LLM may be unreachable; check `LLM_BASE_URL` in `.env` or disable via dropdown |
+| LLM badge shows "LLM offline" (red) | LLM endpoint unreachable — check `LLM_BASE_URL` in `.env`; hover the badge for details |
+| LLM badge shows correct URL but still red | Model name mismatch — run `ollama list` and set `LLM_MODEL` to an **exact** tag (e.g. `llama3.2:latest`) |
+| LLM badge stuck on "LLM…" (orange pulse) | Backend is still probing; wait a moment or click the badge to recheck |
+| Skill generation stays "running" | LLM may be unreachable; check the LLM badge in the header or disable skill gen via dropdown |
 | Skill files show "stub (LLM offline)" | LLM probe failed — run `ollama list` and set `LLM_MODEL` in `.env` to an **exact** installed tag (e.g. `llama3.2:latest`, not `llama3`) |
 | Skill generation very slow | Increase `LLM_TIMEOUT` in `.env`; or switch to a smaller/faster model |
 | Skill files missing after server restart | Hit **Refresh skill** — the backend auto-heals `skill_status` from "running" to "done" and re-discovers files from disk |

@@ -945,3 +945,28 @@ def test_download_skill_file_disk_scan_fallback(client, tmp_text_file, tmp_path,
 
     r = client.get(f"/api/jobs/{job_id}/skill/download/SKILL.md")
     assert r.status_code == 200
+
+
+# ─── LLM status endpoint ─────────────────────────────────────────────────────
+
+def test_llm_status_available(client):
+    """GET /api/llm/status returns available=True when the LLM probe succeeds."""
+    with patch("backend.skill_generator._llm_available", return_value=True):
+        r = client.get("/api/llm/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["available"] is True
+    assert "model" in data
+    assert "base_url" in data
+    assert "checked_at" in data
+
+
+def test_llm_status_unavailable(client):
+    """GET /api/llm/status returns available=False when the LLM probe fails."""
+    with patch("backend.skill_generator._llm_available", return_value=False):
+        r = client.get("/api/llm/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["available"] is False
+    assert "model" in data
+    assert "checked_at" in data

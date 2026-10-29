@@ -9,13 +9,9 @@ import json
 import logging
 import os
 import sys
-import tempfile
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 from pathlib import Path
 from typing import List, Optional
 
@@ -24,6 +20,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+# ─────────────────────────────── Helpers (time) ──────────────────────────────
+
+
+def _now_iso() -> str:
+    """Return current UTC time as an ISO-8601 string."""
+    return datetime.now(timezone.utc).isoformat()
+
 
 # ─────────────────────────────── Logging ─────────────────────────────────────
 
@@ -310,6 +314,29 @@ async def index():
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "version": "1.0.0"}
+
+
+@app.get("/api/llm/status")
+async def llm_status():
+    """Probe the configured LLM endpoint and return availability.
+
+    Runs the blocking probe in the thread pool so the event loop stays free.
+    Response fields:
+      available  – true | false
+      model      – LLM_MODEL env value
+      base_url   – LLM_BASE_URL env value (redacted key not included)
+      checked_at – ISO-8601 UTC timestamp of this probe
+    """
+    from backend.skill_generator import _llm_available, LLM_MODEL, LLM_BASE_URL
+
+    loop = asyncio.get_event_loop()
+    available = await loop.run_in_executor(_thread_pool, _llm_available)
+    return {
+        "available":  available,
+        "model":      LLM_MODEL,
+        "base_url":   LLM_BASE_URL,
+        "checked_at": _now_iso(),
+    }
 
 
 @app.get("/api/dependencies")
