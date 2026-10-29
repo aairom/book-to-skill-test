@@ -1,0 +1,1716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book-to-Skill — Convert books to AI agent skills</title>
+  <style>
+    /* ── Reset & variables ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #22263a;
+      --border:   #2e3350;
+      --accent:   #7c5cff;
+      --accent2:  #4fc3f7;
+      --success:  #4caf50;
+      --warn:     #ff9800;
+      --error:    #f44336;
+      --text:     #e8eaf6;
+      --muted:    #8892b0;
+      --radius:   10px;
+      --shadow:   0 4px 24px rgba(0,0,0,.45);
+    }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1a1d27 0%, #16193a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header .logo { font-size: 1.6rem; }
+    header h1 { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+    header h1 span { color: var(--accent); }
+    header .badge {
+      margin-left: auto;
+      font-size: .72rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 20px;
+      color: var(--muted);
+    }
+    #health-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    #health-dot.ok  { background: var(--success); }
+    #health-dot.err { background: var(--error); }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      grid-template-rows: 1fr;
+      gap: 0;
+      overflow: hidden;
+      height: calc(100vh - 57px);
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-section h2 {
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .dir-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+    }
+    .dir-nav input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: .82rem;
+    }
+    .dir-nav button {
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 2px 4px;
+    }
+    .dir-nav button:hover { color: var(--accent2); }
+    .breadcrumb {
+      font-size: .72rem;
+      color: var(--muted);
+      word-break: break-all;
+      margin-bottom: 4px;
+    }
+    .breadcrumb span {
+      color: var(--accent2);
+      cursor: pointer;
+      text-decoration: underline dotted;
+    }
+    .breadcrumb span:hover { color: var(--text); }
+    #dir-back-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: .74rem;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+    #dir-back-btn:hover { background: var(--surface2); color: var(--text); }
+    .file-list { overflow-y: auto; flex: 1; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      gap: 10px;
+      transition: background .15s;
+    }
+    .file-item:hover { background: var(--surface2); }
+    .file-item.selected { background: rgba(124,92,255,.18); border-left: 3px solid var(--accent); }
+    .file-item.dir-entry { color: var(--accent2); }
+    .file-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-info .fname {
+      font-size: .82rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-info .fmeta { font-size: .7rem; color: var(--muted); }
+    .file-item.empty-msg { color: var(--muted); font-size: .82rem; cursor: default; }
+    .file-item.empty-msg:hover { background: none; }
+
+    /* ── Content panel ───────────────────────────────────────────────── */
+    .content {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 12px 20px;
+      font-size: .82rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s;
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-panel { display: none; flex: 1; overflow: auto; padding: 20px; }
+    .tab-panel.active { display: flex; flex-direction: column; gap: 16px; }
+
+    /* ── Cards ───────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+    .card h3 {
+      font-size: .85rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    /* ── Selected file summary ─────────────────────────────────────── */
+    #selected-info {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    #selected-icon { font-size: 2.4rem; }
+    #selected-details { flex: 1; }
+    #selected-name { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+    #selected-path { font-size: .72rem; color: var(--muted); word-break: break-all; }
+    #selected-size { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+    #no-selection {
+      text-align: center;
+      color: var(--muted);
+      padding: 24px 0;
+      font-size: .9rem;
+    }
+
+    /* ── Process controls ────────────────────────────────────────────── */
+    .controls-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-size: .75rem; color: var(--muted); }
+    .form-group select, .form-group input[type="text"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: .82rem;
+      outline: none;
+    }
+    .form-group select:focus, .form-group input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+    .btn {
+      padding: 8px 18px;
+      border-radius: 6px;
+      border: none;
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .88; }
+    .btn-secondary {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover:not(:disabled) { background: var(--border); }
+    .btn-danger { background: var(--error); color: #fff; }
+
+    /* ── Progress / status ──────────────────────────────────────────── */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .74rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .status-pill.pending  { background: rgba(255,152,0,.18); color: var(--warn); }
+    .status-pill.running  { background: rgba(79,195,247,.18); color: var(--accent2); }
+    .status-pill.done     { background: rgba(76,175,80,.18);  color: var(--success); }
+    .status-pill.error    { background: rgba(244,67,54,.18);  color: var(--error); }
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Log / output ────────────────────────────────────────────────── */
+    .log-box {
+      background: #0a0c14;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: .76rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+      color: #c8e6c9;
+    }
+    .log-box.stderr { color: #ffccbc; }
+    .log-box .log-empty { color: var(--muted); font-style: italic; }
+
+    /* ── Jobs history ────────────────────────────────────────────────── */
+    .job-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      font-size: .8rem;
+    }
+    .job-row .jfile { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .job-row .jtime { color: var(--muted); font-size: .72rem; }
+    .job-row .btn-sm { padding: 4px 10px; font-size: .72rem; }
+
+    /* ── Dependencies ────────────────────────────────────────────────── */
+    #deps-output {
+      background: #0a0c14;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: monospace;
+      font-size: .76rem;
+      white-space: pre-wrap;
+      color: #c8e6c9;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* ── Toast notifications ─────────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 9999;
+    }
+    .toast {
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: .8rem;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+      animation: slideIn .25s ease;
+      max-width: 320px;
+    }
+    .toast.success { background: var(--success); color: #fff; }
+    .toast.error   { background: var(--error);   color: #fff; }
+    .toast.info    { background: var(--accent);  color: #fff; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    /* ── Upload zone ─────────────────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 14px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      font-size: .78rem;
+      color: var(--muted);
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(124,92,255,.07);
+      color: var(--text);
+    }
+    .upload-zone.uploading {
+      border-color: var(--accent2);
+      background: rgba(79,195,247,.05);
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .upload-zone.upload-done  { border-color: var(--success); background: rgba(76,175,80,.05); }
+    .upload-zone.upload-error { border-color: var(--error);   background: rgba(244,67,54,.05); }
+    .upload-zone input[type="file"] { display: none; }
+    .upload-zone .uz-icon { font-size: 1.5rem; display: block; margin-bottom: 4px; }
+
+    /* ── Progress panel (replaces the old 4px bar) ───────────────────── */
+    .upload-progress-panel {
+      display: none;           /* shown by JS when upload starts          */
+      margin-top: 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      padding: 14px 18px;
+      gap: 10px;
+      flex-direction: column;
+    }
+    .upload-progress-panel.active { display: flex; }
+
+    /* Phase label row */
+    .upp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: .8rem;
+    }
+    .upp-phase {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+    .upp-phase .phase-icon { font-size: 1rem; }
+    .upp-pct  { font-size: .8rem; font-weight: 700; color: var(--accent2); min-width: 42px; text-align: right; }
+    .upp-time { font-size: .72rem; color: var(--muted); }
+
+    /* Track + fill */
+    .upp-track {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .upp-fill {
+      height: 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width .25s ease, background .4s ease;
+      background: var(--accent2);
+    }
+    /* indeterminate shimmer when pct unknown (saving phase) */
+    .upp-fill.indeterminate {
+      width: 100% !important;
+      animation: shimmer 1.6s infinite;
+      background: linear-gradient(90deg,
+        var(--border) 0%, var(--accent2) 40%, var(--accent) 60%, var(--border) 100%);
+      background-size: 200% 100%;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    /* phase colours */
+    .upp-fill.phase-uploading  { background: var(--accent2); }
+    .upp-fill.phase-saving     { /* shimmer handled above */ }
+    .upp-fill.phase-done       { background: var(--success); }
+    .upp-fill.phase-error      { background: var(--error); }
+
+    /* Detail message */
+    .upp-detail {
+      font-size: .74rem;
+      color: var(--muted);
+      min-height: 16px;
+    }
+    .upp-detail.warn  { color: var(--warn); }
+    .upp-detail.err   { color: var(--error); }
+    .upp-detail.ok    { color: var(--success); }
+
+    /* ── Job progress bar (Process tab) ──────────────────────────────── */
+    .job-progress-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .job-progress-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .job-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      width: 0%;
+      transition: width .5s ease, background .4s ease;
+      background: var(--accent2);
+    }
+    .job-progress-fill.indeterminate {
+      width: 100% !important;
+      animation: shimmer 1.6s infinite;
+      background: linear-gradient(90deg,
+        var(--border) 0%, var(--accent2) 40%, var(--accent) 60%, var(--border) 100%);
+      background-size: 200% 100%;
+    }
+    .job-progress-fill.phase-done  { background: var(--success); }
+    .job-progress-fill.phase-error { background: var(--error); }
+    .job-elapsed { font-size: .72rem; color: var(--muted); min-width: 58px; text-align: right; }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      .sidebar { max-height: 35vh; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════════════════════════════ -->
+<header>
+  <span class="logo">📚</span>
+  <h1>Book-to-<span>Skill</span></h1>
+  <span class="badge"><span id="health-dot"></span><span id="health-label">connecting…</span></span>
+</header>
+
+<!-- ═══ MAIN ═════════════════════════════════════════════════════════════════ -->
+<main>
+
+  <!-- ─── Sidebar: File browser ─────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <h2>File Browser</h2>
+      <div class="dir-nav">
+        <span>📂</span>
+        <input type="text" id="dir-input" placeholder="Directory path…" />
+        <button id="dir-go-btn" title="Navigate">➜</button>
+      </div>
+      <div class="breadcrumb" id="breadcrumb"></div>
+      <button id="dir-back-btn">⬆ Parent</button>
+    </div>
+
+    <!-- Upload drop zone (collapsed by default, toggled by Upload tab) -->
+    <div class="sidebar-section" id="upload-sidebar-section" style="display:none">
+      <h2>Upload a File</h2>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="upload-file-input"
+               accept=".pdf,.epub,.docx,.html,.htm,.rtf,.mobi,.azw,.azw3,.txt,.md,.rst,.adoc" />
+        <span class="uz-icon">⬆</span>
+        <span id="upload-zone-label">Click or drag &amp; drop a book file</span>
+        <div class="upload-progress" id="upload-progress" style="display:none">
+          <div class="upload-progress-bar" id="upload-progress-bar"></div>
+        </div>
+      </div>
+      <div id="upload-status" style="font-size:.74rem;margin-top:6px;min-height:18px"></div>
+    </div>
+
+    <div class="file-list" id="file-list">
+      <div class="file-item empty-msg"><span class="file-icon">💤</span><span>Loading…</span></div>
+    </div>
+  </aside>
+
+  <!-- ─── Content panel ─────────────────────────────────────────────────── -->
+  <section class="content">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="process">⚙ Process</button>
+      <button class="tab-btn" data-tab="upload">⬆ Upload</button>
+      <button class="tab-btn" data-tab="results">📄 Results</button>
+      <button class="tab-btn" data-tab="history">🕑 History</button>
+      <button class="tab-btn" data-tab="dependencies">🔧 Dependencies</button>
+    </div>
+
+    <!-- ── Process tab ──────────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-process">
+
+      <div class="card">
+        <h3>Selected File</h3>
+        <div id="selected-info">
+          <div id="no-selection">
+            👈 Select a file from the browser on the left to get started.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Processing Options</h3>
+        <div class="controls-row">
+          <div class="form-group">
+            <label>Extraction Mode</label>
+            <select id="mode-select">
+              <option value="text">text — faster, prose/EPUB/DOCX</option>
+              <option value="technical">technical — tables & code (docling)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Skill name (optional)</label>
+            <input type="text" id="skill-name-input" placeholder="my-book-slug" />
+          </div>
+          <div class="form-group">
+            <label>Generate skill <span style="font-size:.68rem;color:var(--accent)">(LLM)</span></label>
+            <select id="gen-skill-select">
+              <option value="true">Yes — run LLM skill generation</option>
+              <option value="false">No — extraction only</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="process-btn" disabled>▶ Process</button>
+        </div>
+      </div>
+
+      <div class="card" id="job-status-card" style="display:none">
+        <h3>Job Status</h3>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <span id="job-status-pill"></span>
+          <span id="job-id-label" style="font-size:.72rem;color:var(--muted)"></span>
+          <button class="btn btn-secondary btn-sm" id="cancel-job-btn" style="margin-left:auto">✕ Clear</button>
+        </div>
+
+        <!-- Job progress bar -->
+        <div class="job-progress-row" id="job-progress-row" aria-live="polite">
+          <div class="job-progress-track">
+            <div class="job-progress-fill indeterminate" id="job-progress-fill"
+                 role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                 aria-valuenow="0" aria-label="Processing progress"></div>
+          </div>
+          <span class="job-elapsed" id="job-elapsed">0s</span>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-bottom:8px;font-size:.75rem;color:var(--muted)">
+          <span id="job-started"></span>
+          <span id="job-finished"></span>
+        </div>
+
+        <details open>
+          <summary style="font-size:.78rem;color:var(--muted);cursor:pointer;margin-bottom:6px">stdout</summary>
+          <div class="log-box" id="stdout-box"><span class="log-empty">(empty)</span></div>
+        </details>
+        <details style="margin-top:8px">
+          <summary style="font-size:.78rem;color:var(--muted);cursor:pointer;margin-bottom:6px">stderr</summary>
+          <div class="log-box stderr" id="stderr-box"><span class="log-empty">(empty)</span></div>
+        </details>
+      </div>
+
+    </div>
+
+    <!-- ── Results tab ───────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-results">
+
+      <!-- Skill summary card – populated by renderSkillCard() -->
+      <div class="card" id="skill-card" style="display:none">
+        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">Extraction Summary</div>
+            <div id="sc-title" style="font-size:1.1rem;font-weight:700;color:var(--text);word-break:break-word"></div>
+            <div id="sc-subtitle" style="font-size:.8rem;color:var(--muted);margin-top:3px"></div>
+          </div>
+          <div id="sc-badge-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;padding-top:4px"></div>
+        </div>
+
+        <!-- Stat grid -->
+        <div id="sc-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:16px"></div>
+
+        <!-- Chapter headings -->
+        <div id="sc-chapters-wrap" style="margin-top:16px;display:none">
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">Detected Chapters</div>
+          <ol id="sc-chapters" style="margin:0;padding-left:18px;font-size:.82rem;line-height:1.7;color:var(--text)"></ol>
+        </div>
+
+        <!-- Extraction method notice -->
+        <div id="sc-method-notice" style="margin-top:14px;padding:8px 12px;border-radius:6px;font-size:.78rem;display:none"></div>
+      </div>
+
+      <!-- Placeholder before first job -->
+      <div class="card" id="skill-card-empty">
+        <div style="text-align:center;padding:24px 0;color:var(--muted);font-size:.88rem">
+          📚 Select a file and press <strong style="color:var(--text)">Process</strong> to generate a skill summary.
+        </div>
+      </div>
+
+      <!-- Generated skill files card -->
+      <div class="card" id="skill-files-card" style="display:none">
+        <h3>Generated Skill Files</h3>
+        <div id="skill-gen-status" style="margin-bottom:10px"></div>
+        <div id="skill-files-list" style="font-size:.82rem"></div>
+        <button class="btn btn-secondary" id="refresh-skill-btn" style="margin-top:10px">↻ Refresh skill</button>
+      </div>
+
+      <div class="card">
+        <h3>Extracted Text Preview</h3>
+        <div class="log-box" id="extracted-preview" style="max-height:380px">
+          <span class="log-empty">Run a processing job to see extracted text here.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Output Files</h3>
+        <div id="output-files-list" style="font-size:.82rem">
+          <span style="color:var(--muted)">No output files yet.</span>
+        </div>
+        <button class="btn btn-secondary" id="refresh-output-btn" style="margin-top:10px">↻ Refresh</button>
+      </div>
+
+    </div>
+
+    <!-- ── History tab ───────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-history">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.85rem;color:var(--muted)">All processing jobs in this session</span>
+        <button class="btn btn-secondary" id="refresh-history-btn">↻ Refresh</button>
+      </div>
+      <div id="history-list">
+        <p style="color:var(--muted);font-size:.85rem">No jobs yet.</p>
+      </div>
+    </div>
+
+    <!-- ── Dependencies tab ─────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-dependencies">
+      <div class="card">
+        <h3>Extractor Status</h3>
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:12px">
+          Checks which optional extractors (docling, pypdf, ebooklib, etc.) are
+          installed in the current environment.
+        </p>
+        <button class="btn btn-primary" id="check-deps-btn">🔍 Run --check</button>
+      </div>
+      <div class="card">
+        <pre id="deps-output"><span style="color:var(--muted)">Press "Run --check" above.</span></pre>
+      </div>
+    </div>
+
+    <!-- ── Upload tab ───────────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-upload">
+
+      <div class="card">
+        <h3>Upload Book File</h3>
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:14px">
+          Upload a file from your computer directly into the <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">input/</code> folder.
+          After upload it will appear in the file browser and can be processed immediately.
+        </p>
+
+        <!-- Large drop zone in the main panel -->
+        <div class="upload-zone" id="upload-zone-main" style="padding:32px 20px"
+             role="button" tabindex="0"
+             aria-label="Upload zone — click or drag and drop a book file">
+          <input type="file" id="upload-file-input-main"
+                 accept=".pdf,.epub,.docx,.html,.htm,.rtf,.mobi,.azw,.azw3,.txt,.md,.rst,.adoc"
+                 aria-label="Choose a book file to upload" />
+          <span class="uz-icon" style="font-size:2.4rem" aria-hidden="true">⬆</span>
+          <div style="font-size:.9rem;font-weight:600;margin-bottom:4px" id="upload-zone-main-label">
+            Click to choose or drag &amp; drop a book file
+          </div>
+          <div style="font-size:.72rem;color:var(--muted)">
+            PDF · EPUB · DOCX · HTML · RTF · MOBI · TXT · MD · RST · ADOC — max 100 MB
+          </div>
+        </div>
+
+        <!-- Progress panel — shown during/after upload -->
+        <div class="upload-progress-panel" id="upp-main" role="status" aria-live="polite">
+          <div class="upp-header">
+            <div class="upp-phase">
+              <span class="phase-icon" id="upp-main-icon" aria-hidden="true">⬆</span>
+              <span id="upp-main-phase">Uploading…</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="upp-pct" id="upp-main-pct">0%</span>
+              <span class="upp-time" id="upp-main-time">0s</span>
+            </div>
+          </div>
+          <div class="upp-track">
+            <div class="upp-fill phase-uploading" id="upp-main-fill"
+                 role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                 aria-valuenow="0" aria-label="Upload progress"></div>
+          </div>
+          <div class="upp-detail" id="upp-main-detail"></div>
+        </div>
+      </div>
+
+      <div class="card" id="upload-result-card" style="display:none">
+        <h3>Uploaded File</h3>
+        <div id="upload-result-info" style="font-size:.85rem;display:flex;align-items:center;gap:12px">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn btn-primary" id="upload-select-btn">☑ Select &amp; Go to Process</button>
+          <button class="btn btn-secondary" id="upload-browse-btn">🗂 Show in Browser</button>
+        </div>
+      </div>
+
+    </div>
+
+  </section>
+</main>
+
+<!-- ── Toast container ────────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ═══ SCRIPT ═══════════════════════════════════════════════════════════════ -->
+<script>
+const API = '';   // same origin
+let selectedFile = null;
+let currentDir  = null;
+let parentDir   = null;
+let activeJobId = null;
+let pollTimer   = null;
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(API + path, { headers: {'Content-Type':'application/json'}, ...opts });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.detail || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024)   return `${bytes} B`;
+  if (bytes < 1<<20) return `${(bytes/1024).toFixed(1)} KB`;
+  return `${(bytes/(1<<20)).toFixed(2)} MB`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleTimeString(); } catch { return iso; }
+}
+
+function extIcon(ext) {
+  const map = { '.pdf':'📕', '.epub':'📗', '.docx':'📘', '.html':'🌐', '.htm':'🌐',
+                '.rtf':'📄', '.mobi':'📱', '.azw':'📱', '.azw3':'📱',
+                '.txt':'📝', '.md':'📝', '.rst':'📝', '.adoc':'📝' };
+  return map[ext] || '📄';
+}
+
+// ─── Health check ────────────────────────────────────────────────────────────
+
+async function checkHealth() {
+  const dot = document.getElementById('health-dot');
+  const lbl = document.getElementById('health-label');
+  try {
+    const d = await apiFetch('/api/health');
+    dot.className = 'ok';
+    lbl.textContent = `API v${d.version}`;
+  } catch {
+    dot.className = 'err';
+    lbl.textContent = 'offline';
+  }
+}
+
+// ─── File browser ────────────────────────────────────────────────────────────
+
+async function loadDirectory(dir) {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '<div class="file-item empty-msg"><span class="file-icon">⏳</span><span>Loading…</span></div>';
+
+  try {
+    // Get subdirs and files in parallel
+    const [dirsData, filesData] = await Promise.all([
+      apiFetch(`/api/directories?directory=${encodeURIComponent(dir)}`),
+      apiFetch(`/api/files?directory=${encodeURIComponent(dir)}`),
+    ]);
+    currentDir = dirsData.current;
+    parentDir  = dirsData.parent;
+
+    document.getElementById('dir-input').value = currentDir;
+    document.getElementById('breadcrumb').textContent = currentDir;
+    document.getElementById('dir-back-btn').disabled = !parentDir;
+
+    list.innerHTML = '';
+
+    // Subdirectory entries
+    dirsData.subdirectories.forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'file-item dir-entry';
+      item.innerHTML = `<span class="file-icon">📁</span>
+        <div class="file-info"><div class="fname">${d.name}/</div></div>`;
+      item.addEventListener('click', () => loadDirectory(d.path));
+      list.appendChild(item);
+    });
+
+    // File entries
+    if (filesData.files.length === 0 && dirsData.subdirectories.length === 0) {
+      list.innerHTML = '<div class="file-item empty-msg"><span class="file-icon">📭</span><span>No supported files found</span></div>';
+    } else {
+      filesData.files.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.dataset.path = f.path;
+        item.innerHTML = `
+          <span class="file-icon">${extIcon(f.extension)}</span>
+          <div class="file-info">
+            <div class="fname">${f.name}</div>
+            <div class="fmeta">${fmtSize(f.size)} · ${fmtDate(f.modified)}</div>
+          </div>`;
+        item.addEventListener('click', () => selectFile(f, item));
+        list.appendChild(item);
+      });
+    }
+  } catch (err) {
+    list.innerHTML = `<div class="file-item empty-msg" style="color:var(--error)">⚠ ${err.message}</div>`;
+    toast(err.message, 'error');
+  }
+}
+
+function selectFile(f, itemEl) {
+  document.querySelectorAll('.file-item').forEach(el => el.classList.remove('selected'));
+  itemEl.classList.add('selected');
+  selectedFile = f;
+
+  const info = document.getElementById('selected-info');
+  info.innerHTML = `
+    <span id="selected-icon">${extIcon(f.extension)}</span>
+    <div id="selected-details">
+      <div id="selected-name">${f.name}</div>
+      <div id="selected-path">${f.path}</div>
+      <div id="selected-size">${fmtSize(f.size)} · modified ${fmtDate(f.modified)}</div>
+    </div>`;
+
+  document.getElementById('process-btn').disabled = false;
+}
+
+// ─── Processing ──────────────────────────────────────────────────────────────
+
+let _jobStartTs = null;       // Date.now() when the current job was submitted
+let _jobElapsedTimer = null;  // setInterval for the elapsed counter in the UI
+
+function _startJobElapsedTicker() {
+  _jobStartTs = Date.now();
+  if (_jobElapsedTimer) clearInterval(_jobElapsedTimer);
+  _jobElapsedTimer = setInterval(() => {
+    const el = document.getElementById('job-elapsed');
+    if (el) el.textContent = `${Math.round((Date.now() - _jobStartTs) / 1000)}s`;
+  }, 1000);
+}
+
+function _stopJobElapsedTicker() {
+  clearInterval(_jobElapsedTimer);
+  _jobElapsedTimer = null;
+}
+
+/** Update the job progress bar element. */
+function _renderJobProgress(status) {
+  const fill = document.getElementById('job-progress-fill');
+  if (!fill) return;
+  fill.classList.remove('indeterminate','phase-done','phase-error');
+  switch (status) {
+    case 'pending':
+    case 'running':
+      fill.classList.add('indeterminate');
+      fill.setAttribute('aria-valuenow', 0);
+      break;
+    case 'done':
+      fill.style.width = '100%';
+      fill.classList.add('phase-done');
+      fill.setAttribute('aria-valuenow', 100);
+      break;
+    case 'error':
+      fill.style.width = '100%';
+      fill.classList.add('phase-error');
+      fill.setAttribute('aria-valuenow', 100);
+      break;
+  }
+}
+
+async function startProcessing() {
+  if (!selectedFile) return;
+  const mode         = document.getElementById('mode-select').value;
+  const skillName    = document.getElementById('skill-name-input').value.trim() || undefined;
+  const generateSkill = document.getElementById('gen-skill-select').value === 'true';
+
+  document.getElementById('process-btn').disabled = true;
+  document.getElementById('job-status-card').style.display = '';
+
+  // Reset progress bar
+  const fill = document.getElementById('job-progress-fill');
+  if (fill) {
+    fill.classList.remove('phase-done','phase-error');
+    fill.classList.add('indeterminate');
+    fill.style.width = '';
+  }
+  const elapsed = document.getElementById('job-elapsed');
+  if (elapsed) elapsed.textContent = '0s';
+  _startJobElapsedTicker();
+
+  try {
+    const job = await apiFetch('/api/process', {
+      method: 'POST',
+      body: JSON.stringify({
+        file_path: selectedFile.path,
+        mode,
+        skill_name: skillName,
+        generate_skill: generateSkill,
+      }),
+    });
+    activeJobId = job.job_id;
+    toast(`Job started: ${job.job_id.slice(0,8)}…`, 'info');
+    renderJobStatus({ ...job, file_path: selectedFile.path });
+    schedulePoll();
+  } catch (err) {
+    _stopJobElapsedTicker();
+    toast(err.message, 'error');
+    document.getElementById('process-btn').disabled = false;
+  }
+}
+
+function schedulePoll() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollJob, 1500);
+}
+
+async function pollJob() {
+  if (!activeJobId) { clearInterval(pollTimer); return; }
+  try {
+    const job = await apiFetch(`/api/jobs/${activeJobId}`);
+    renderJobStatus(job);
+    _renderJobProgress(job.status);
+
+    // Keep polling while extraction is running OR skill generation is still running
+    const skillPending = job.generate_skill !== false &&
+      (job.skill_status === 'running' || (job.status === 'done' && job.skill_status == null));
+
+    if ((job.status === 'done' || job.status === 'error') && !skillPending) {
+      clearInterval(pollTimer);
+      _stopJobElapsedTicker();
+      const elapsed = document.getElementById('job-elapsed');
+      if (elapsed && _jobStartTs) {
+        elapsed.textContent = `${Math.round((Date.now() - _jobStartTs) / 1000)}s`;
+      }
+      document.getElementById('process-btn').disabled = false;
+      if (job.status === 'done') {
+        toast('Processing complete! ✅', 'success');
+        populateResults(job);
+      } else {
+        toast(`Error: ${job.error}`, 'error');
+      }
+    } else if (job.status === 'done' && skillPending) {
+      // Extraction done; skill generation still in progress — keep polling.
+      // Refresh the skill files card on every tick so partial results appear
+      // immediately and the auto-heal kicks in as soon as files land on disk.
+      _renderSkillGenStatus(job.skill_status, null);
+      document.getElementById('skill-files-card').style.display = '';
+      refreshSkillFiles(job.job_id);
+    }
+  } catch (err) {
+    clearInterval(pollTimer);
+    _stopJobElapsedTicker();
+    toast('Lost connection to API', 'error');
+  }
+}
+
+function renderJobStatus(job) {
+  const pill = document.getElementById('job-status-pill');
+  const icons = { pending:'⏳', running:'<span class="spinner"></span>', done:'✅', error:'❌' };
+  pill.className = `status-pill ${job.status}`;
+  pill.innerHTML = `${icons[job.status] || ''} ${job.status}`;
+
+  document.getElementById('job-id-label').textContent = `ID: ${job.job_id}`;
+  document.getElementById('job-started').textContent   = job.started_at  ? `Started: ${fmtDate(job.started_at)}`  : '';
+  document.getElementById('job-finished').textContent  = job.finished_at ? `Finished: ${fmtDate(job.finished_at)}` : '';
+
+  const stdoutBox = document.getElementById('stdout-box');
+  stdoutBox.textContent = job.stdout || '';
+  if (!job.stdout) stdoutBox.innerHTML = '<span class="log-empty">(empty)</span>';
+  stdoutBox.scrollTop = stdoutBox.scrollHeight;
+
+  const stderrBox = document.getElementById('stderr-box');
+  stderrBox.textContent = job.stderr || '';
+  if (!job.stderr) stderrBox.innerHTML = '<span class="log-empty">(empty)</span>';
+}
+
+// ─── Skill card renderer ──────────────────────────────────────────────────────
+
+function _badge(text, color) {
+  return `<span style="font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;`
+    + `background:${color}22;border:1px solid ${color}55;color:${color}">${text}</span>`;
+}
+
+function _statTile(label, value, color) {
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;`
+    + `padding:10px 12px;text-align:center">`
+    + `<div style="font-size:1.15rem;font-weight:700;color:${color || 'var(--text)'}">${value}</div>`
+    + `<div style="font-size:.68rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.05em">${label}</div>`
+    + `</div>`;
+}
+
+function renderSkillCard(meta) {
+  const card    = document.getElementById('skill-card');
+  const empty   = document.getElementById('skill-card-empty');
+
+  if (!meta) { card.style.display = 'none'; empty.style.display = ''; return; }
+
+  // ── Title & subtitle ────────────────────────────────────────────────────
+  const rawName  = meta.filename || meta.source_file || 'Unknown document';
+  const title    = rawName.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+  document.getElementById('sc-title').textContent = title;
+
+  const subtitle = [
+    meta.format ? meta.format.toUpperCase() : null,
+    meta.extraction_mode ? `mode: ${meta.extraction_mode}` : null,
+    meta.file_size_mb != null ? `${Number(meta.file_size_mb).toFixed(1)} MB` : null,
+  ].filter(Boolean).join(' · ');
+  document.getElementById('sc-subtitle').textContent = subtitle;
+
+  // ── Badges ──────────────────────────────────────────────────────────────
+  const badges = [];
+  if (meta.has_toc)         badges.push(_badge('ToC detected', '#4fc3f7'));
+  if (meta.chapters_detected > 0)
+    badges.push(_badge(`${meta.chapters_detected} chapters`, '#7c5cff'));
+  if (meta.extraction_method)
+    badges.push(_badge(meta.extraction_method.replace(/-/g, ' '), '#4caf50'));
+  document.getElementById('sc-badge-row').innerHTML = badges.join('');
+
+  // ── Stats grid ──────────────────────────────────────────────────────────
+  const stats = [];
+  if (meta.pages)              stats.push(_statTile('Pages',   meta.pages,                           '#4fc3f7'));
+  if (meta.words)              stats.push(_statTile('Words',   Number(meta.words).toLocaleString(),   '#7c5cff'));
+  if (meta.estimated_tokens)   stats.push(_statTile('Tokens',  meta.estimated_tokens_human || `~${Math.round(meta.estimated_tokens/1000)}K`, '#ff9800'));
+  if (meta.chars)              stats.push(_statTile('Chars',   Number(meta.chars).toLocaleString(),   '#4caf50'));
+  document.getElementById('sc-stats').innerHTML = stats.join('');
+
+  // ── Chapter headings sample ──────────────────────────────────────────────
+  const headings = meta.chapter_headings_sample || [];
+  const chapWrap = document.getElementById('sc-chapters-wrap');
+  const chapList = document.getElementById('sc-chapters');
+  if (headings.length > 0) {
+    chapList.innerHTML = headings.map(h =>
+      `<li style="margin-bottom:2px">${h.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</li>`
+    ).join('');
+    // Label clarifies when library detected too many "chapters" (often page numbers)
+    const label = document.querySelector('#sc-chapters-wrap > div');
+    const total = meta.chapters_detected || headings.length;
+    label.textContent = `Detected Chapters (showing ${headings.length} of ${total})`;
+    chapWrap.style.display = '';
+  } else {
+    chapWrap.style.display = 'none';
+  }
+
+  // ── Extraction method notice ─────────────────────────────────────────────
+  const notice  = document.getElementById('sc-method-notice');
+  const sources = meta.sources || [];
+  const fallback = sources[0] && sources[0].fallback_reason;
+  if (fallback) {
+    notice.style.display = '';
+    notice.style.background = 'rgba(255,152,0,.08)';
+    notice.style.border = '1px solid rgba(255,152,0,.3)';
+    notice.style.color = '#ffb74d';
+    notice.innerHTML = `⚠ Preferred extractor unavailable (<code>${fallback.replace(/_/g,' ')}</code>). `
+      + `Used <strong>${meta.extraction_method}</strong> as fallback. `
+      + `Run <kbd>uv pip install docling</kbd> in the app virtual environment for higher-quality PDF extraction.`;
+  } else {
+    notice.style.display = 'none';
+  }
+
+  // Show card, hide placeholder
+  card.style.display  = '';
+  empty.style.display = 'none';
+}
+
+function populateResults(job) {
+  // Switch to Results tab
+  switchTab('results');
+
+  // Render the structured extraction card from metadata
+  renderSkillCard(job.metadata || null);
+
+  // Extracted text preview
+  const preview = document.getElementById('extracted-preview');
+  if (job.extracted_text) {
+    preview.textContent = job.extracted_text.slice(0, 8000) +
+      (job.extracted_text.length > 8000 ? '\n\n[… truncated for display …]' : '');
+  } else {
+    preview.innerHTML = '<span class="log-empty">No extracted text file found. Check stdout above.</span>';
+  }
+
+  // Render skill generation section — always show the card when the job is done
+  // so files generated before a server restart are still visible (disk-scan fallback).
+  _renderSkillGenStatus(job.skill_status, job.skill_result);
+  document.getElementById('skill-files-card').style.display = '';
+  refreshSkillFiles(job.job_id);
+
+  refreshOutputFiles();
+}
+
+// ─── Skill generation section ─────────────────────────────────────────────────
+
+function _renderSkillGenStatus(skillStatus, skillResult) {
+  const el = document.getElementById('skill-gen-status');
+  if (!el) return;
+  if (!skillStatus) { el.innerHTML = ''; return; }
+
+  const icons = { running: '<span class="spinner"></span>', done: '✅', error: '❌', pending: '⏳' };
+  const colors = { running: 'var(--accent2)', done: 'var(--success)', error: 'var(--error)', pending: 'var(--warn)' };
+  const icon  = icons[skillStatus]  || '🔄';
+  const color = colors[skillStatus] || 'var(--muted)';
+
+  let extra = '';
+  if (skillStatus === 'done' && skillResult) {
+    const ch   = skillResult.chapters || 0;
+    const llm  = skillResult.llm_available;
+    const name = skillResult.skill_name || '';
+    // llm_available can be null for disk-recovered jobs (generation session unknown)
+    const llmLabel = llm === null ? '🔍 recovered from disk'
+                   : llm         ? '🤖 LLM-generated'
+                                 : '🔨 stub (LLM offline)';
+    extra = ` <span style="color:var(--muted);font-size:.78rem">· ${ch} chapter${ch !== 1 ? 's' : ''} · `
+      + `${llmLabel}</span>`
+      + (name ? ` <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:.74rem">${name}</code>` : '');
+  }
+  if (skillStatus === 'error' && skillResult && skillResult.error) {
+    extra = ` <span style="color:var(--error);font-size:.78rem">— ${skillResult.error}</span>`;
+  }
+
+  el.innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:${color}">`
+    + `${icon} Skill generation: <strong>${skillStatus}</strong>${extra}</span>`;
+}
+
+async function refreshSkillFiles(jobId) {
+  const list = document.getElementById('skill-files-list');
+  if (!list || !jobId) return;
+  try {
+    const data = await apiFetch(`/api/jobs/${jobId}/skill`);
+    _renderSkillGenStatus(data.skill_status, data.skill_result);
+    if (!data.files || data.files.length === 0) {
+      list.innerHTML = '<span style="color:var(--muted)">No skill files generated yet.</span>';
+      return;
+    }
+    const skillName = data.skill_result && data.skill_result.skill_name;
+    // Group: top-level vs chapters/
+    const topLevel  = data.files.filter(f => !f.rel_path.includes('/'));
+    const chapters  = data.files.filter(f => f.rel_path.startsWith('chapters/'));
+
+    function fileRow(f) {
+      // Encode each path segment individually so '/' separators are preserved in
+      // the URL while special characters within segment names are safely encoded.
+      const encodedPath = f.rel_path.split('/').map(encodeURIComponent).join('/');
+      const dlUrl = `/api/jobs/${encodeURIComponent(jobId)}/skill/download/${encodedPath}`;
+      const icon  = f.name === 'SKILL.md' ? '📋' : f.name.startsWith('ch') ? '📑' : '📄';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span style="flex:1;font-size:.8rem">${icon} ${f.rel_path}</span>
+        <span style="font-size:.72rem;color:var(--muted)">${fmtSize(f.size)}</span>
+        <a href="${dlUrl}" download style="font-size:.75rem;color:var(--accent)">⬇</a>
+      </div>`;
+    }
+
+    let html = '';
+    if (topLevel.length) {
+      html += topLevel.map(fileRow).join('');
+    }
+    if (chapters.length) {
+      html += `<div style="margin-top:8px;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">`
+        + `Chapters (${chapters.length})</div>`;
+      html += chapters.map(fileRow).join('');
+    }
+    list.innerHTML = html;
+  } catch (err) {
+    list.innerHTML = `<span style="color:var(--error)">${err.message}</span>`;
+  }
+}
+
+// ─── Output files ────────────────────────────────────────────────────────────
+
+async function refreshOutputFiles() {
+  const container = document.getElementById('output-files-list');
+  try {
+    const data = await apiFetch('/api/output/files');
+    if (data.files.length === 0) {
+      container.innerHTML = '<span style="color:var(--muted)">No output files yet.</span>';
+    } else {
+      container.innerHTML = data.files.map(f => {
+        // Files live either at output/<name> (job_id=null) or output/<job_id>/<name>
+        const dlUrl = f.job_id
+          ? `/api/output/download/${encodeURIComponent(f.job_id)}/${encodeURIComponent(f.name)}`
+          : `/api/output/download/${encodeURIComponent(f.name)}`;
+        const label = f.job_id
+          ? `<span style="font-size:.68rem;color:var(--muted);margin-right:4px">[${f.job_id.slice(0,8)}]</span>${f.name}`
+          : f.name;
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:.8rem;flex:1">${label}</span>
+          <span style="font-size:.72rem;color:var(--muted)">${fmtSize(f.size)}</span>
+          <a href="${dlUrl}" download style="font-size:.75rem;color:var(--accent)">⬇ Download</a>
+        </div>`;
+      }).join('');
+    }
+  } catch (err) {
+    container.innerHTML = `<span style="color:var(--error)">${err.message}</span>`;
+  }
+}
+
+// ─── History ─────────────────────────────────────────────────────────────────
+
+async function refreshHistory() {
+  const container = document.getElementById('history-list');
+  try {
+    const data = await apiFetch('/api/jobs');
+    if (data.jobs.length === 0) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No jobs yet.</p>';
+    } else {
+      container.innerHTML = data.jobs.map(j => {
+        const fname = j.file_path ? j.file_path.split('/').pop() : '—';
+        const skillBtn = j.status === 'done'
+          ? `<button class="btn btn-primary btn-sm" onclick="viewSkill('${j.job_id}')">📋 Skill</button>`
+          : '';
+        return `<div class="job-row">
+          <span class="status-pill ${j.status}" style="flex-shrink:0">${j.status}</span>
+          <span class="jfile" title="${j.file_path}">${fname}</span>
+          <span class="jtime">${fmtDate(j.started_at)}</span>
+          ${skillBtn}
+          <button class="btn btn-secondary btn-sm" onclick="viewJob('${j.job_id}')">View</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteJob('${j.job_id}')">✕</button>
+        </div>`;
+      }).join('');
+    }
+  } catch (err) {
+    container.innerHTML = `<p style="color:var(--error)">${err.message}</p>`;
+  }
+}
+
+function viewJob(jobId) {
+  activeJobId = jobId;
+  switchTab('process');
+  document.getElementById('job-status-card').style.display = '';
+  pollJob();
+}
+
+async function viewSkill(jobId) {
+  try {
+    const job = await apiFetch(`/api/jobs/${jobId}`);
+    activeJobId = jobId;
+    populateResults(job);
+  } catch (err) {
+    toast('Could not load skill: ' + err.message, 'error');
+  }
+}
+
+async function deleteJob(jobId) {
+  try {
+    await apiFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+    toast('Job removed', 'info');
+    if (jobId === activeJobId) activeJobId = null;
+    refreshHistory();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── Dependencies ─────────────────────────────────────────────────────────────
+
+async function checkDeps() {
+  const out = document.getElementById('deps-output');
+  out.textContent = 'Running --check…';
+  try {
+    const data = await apiFetch('/api/dependencies');
+    out.textContent = (data.stdout + '\n' + data.stderr).trim() || '(no output)';
+  } catch (err) {
+    out.textContent = `Error: ${err.message}`;
+  }
+}
+
+// ─── Upload ───────────────────────────────────────────────────────────────────
+
+let _lastUploadResult = null;  // {name, path, size, directory}
+
+// ── Progress-panel helper ────────────────────────────────────────────────────
+/**
+ * Render one state into the upload progress panel.
+ * @param {string} panelId  - id of .upload-progress-panel
+ * @param {'uploading'|'saving'|'done'|'error'} phase
+ * @param {number|null} pct  - 0-100 or null for indeterminate
+ * @param {string} detail    - small text below the bar
+ * @param {number} elapsed   - seconds since upload started
+ */
+function _uppRender(panelId, phase, pct, detail, elapsed) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  panel.classList.add('active');
+
+  const icons  = { uploading:'⬆', saving:'💾', done:'✅', error:'❌' };
+  const labels = { uploading:'Uploading…', saving:'Saving to disk…', done:'Upload complete', error:'Upload failed' };
+
+  const iconEl   = panel.querySelector('.phase-icon');
+  const phaseEl  = panel.querySelector('[id$="-phase"]');
+  const pctEl    = panel.querySelector('[id$="-pct"]');
+  const timeEl   = panel.querySelector('[id$="-time"]');
+  const fillEl   = panel.querySelector('.upp-fill');
+  const detailEl = panel.querySelector('.upp-detail');
+
+  if (iconEl)  iconEl.textContent  = icons[phase]  || '⬆';
+  if (phaseEl) phaseEl.textContent = labels[phase] || phase;
+  if (pctEl)   pctEl.textContent   = pct !== null ? `${pct}%` : '—';
+  if (timeEl)  timeEl.textContent  = `${elapsed}s`;
+
+  if (fillEl) {
+    fillEl.classList.remove('phase-uploading','phase-saving','phase-done','phase-error','indeterminate');
+    fillEl.classList.add(`phase-${phase}`);
+    if (pct === null) {
+      fillEl.classList.add('indeterminate');
+      fillEl.removeAttribute('aria-valuenow');
+    } else {
+      fillEl.style.width = `${pct}%`;
+      fillEl.setAttribute('aria-valuenow', pct);
+    }
+  }
+
+  if (detailEl) {
+    detailEl.className = 'upp-detail';
+    detailEl.textContent = detail || '';
+    if (phase === 'error') detailEl.classList.add('err');
+    if (phase === 'done')  detailEl.classList.add('ok');
+  }
+}
+
+/**
+ * Upload a file using XHR for real upload-progress events.
+ * Drives a 3-phase state machine:  uploading → saving → done / error
+ *
+ * @param {File}   file    - File object from input / drop event
+ * @param {string} zoneId  - id of the .upload-zone element (for border styling)
+ * @param {string} panelId - id of the .upload-progress-panel element
+ * @param {string} labelId - id of the text label inside the zone
+ */
+function uploadFile(file, zoneId, panelId, labelId) {
+  const zone  = document.getElementById(zoneId);
+  const label = document.getElementById(labelId);
+
+  // ── Phase state ────────────────────────────────────────────────────
+  let phase        = 'uploading';
+  let startTs      = Date.now();
+  let tickInterval = null;
+  const MIN_SAVING_MS = 400;  // show "saving" for at least this long
+
+  function getElapsed() { return Math.round((Date.now() - startTs) / 1000); }
+
+  function startTicker() {
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = setInterval(() => {
+      const elapsed  = getElapsed();
+      const panel    = document.getElementById(panelId);
+      if (!panel) return;
+      const timeEl   = panel.querySelector('[id$="-time"]');
+      const detailEl = panel.querySelector('.upp-detail');
+      if (timeEl) timeEl.textContent = `${elapsed}s`;
+      // Stall warning after 30 s with no progress event
+      if (phase === 'uploading' && elapsed > 30 && detailEl &&
+          !detailEl.classList.contains('warn')) {
+        detailEl.className = 'upp-detail warn';
+        detailEl.textContent = 'Transfer is slow — still uploading…';
+      }
+    }, 1000);
+  }
+
+  function stopTicker() { clearInterval(tickInterval); tickInterval = null; }
+
+  function zoneState(cls) {
+    if (!zone) return;
+    zone.classList.remove('uploading','upload-done','upload-error');
+    if (cls) zone.classList.add(cls);
+  }
+
+  // ── Kick off ───────────────────────────────────────────────────────
+  zoneState('uploading');
+  if (label) label.textContent = `Uploading ${file.name}…`;
+  _uppRender(panelId, 'uploading', 0, `${fmtSize(file.size)} — starting…`, 0);
+  startTicker();
+
+  // ── XHR ───────────────────────────────────────────────────────────
+  const form = new FormData();
+  form.append('file', file);
+  const xhr  = new XMLHttpRequest();
+
+  let lastPct = 0;
+  xhr.upload.addEventListener('progress', e => {
+    if (!e.lengthComputable) return;
+    const pct     = Math.round((e.loaded / e.total) * 100);
+    if (pct === lastPct) return;
+    lastPct        = pct;
+    const elapsed  = getElapsed();
+
+    if (pct >= 100 && phase === 'uploading') {
+      // Browser finished sending; server is now writing to disk
+      phase = 'saving';
+      _uppRender(panelId, 'saving', null,
+        `${fmtSize(file.size)} received — writing to disk…`, elapsed);
+    } else if (pct < 100) {
+      const speed = elapsed > 0 ? ` · ${fmtSize(e.loaded / elapsed)}/s` : '';
+      _uppRender(panelId, 'uploading', pct,
+        `${fmtSize(e.loaded)} of ${fmtSize(file.size)}${speed}`, elapsed);
+    }
+  });
+
+  xhr.addEventListener('load', () => {
+    stopTicker();
+    const elapsed = getElapsed();
+
+    if (xhr.status >= 200 && xhr.status < 300) {
+      let result;
+      try { result = JSON.parse(xhr.responseText); } catch { result = {}; }
+      _lastUploadResult = result;
+
+      const flip = () => {
+        phase = 'done';
+        zoneState('upload-done');
+        if (label) label.textContent = `✓ ${result.name || file.name}`;
+        _uppRender(panelId, 'done', 100,
+          `Saved to input/ — ${fmtSize(result.size || file.size)}`, elapsed);
+        toast(`Uploaded ${result.name}`, 'success');
+
+        // Populate the result card
+        const card = document.getElementById('upload-result-card');
+        if (card) {
+          const info = document.getElementById('upload-result-info');
+          const ext = '.' + (result.name || file.name).split('.').pop().toLowerCase();
+          info.innerHTML =
+            `<span style="font-size:2rem">${extIcon(ext)}</span>` +
+            `<div>` +
+            `<div style="font-weight:600">${result.name || file.name}</div>` +
+            `<div style="color:var(--muted);font-size:.72rem">${result.path || ''} · ${fmtSize(result.size || file.size)}</div>` +
+            `</div>`;
+          card.style.display = '';
+        }
+        loadDirectory(result.directory || currentDir);
+      };
+
+      // Ensure the "saving" phase is visible for at least MIN_SAVING_MS
+      const remaining = MIN_SAVING_MS - (Date.now() - startTs);
+      if (remaining > 50) setTimeout(flip, remaining); else flip();
+
+    } else {
+      let detail = `Upload failed (HTTP ${xhr.status})`;
+      try { detail = JSON.parse(xhr.responseText).detail || detail; } catch { /* */ }
+      phase = 'error';
+      zoneState('upload-error');
+      if (label) label.textContent = 'Click or drag & drop a book file';
+      _uppRender(panelId, 'error', null, detail, elapsed);
+      toast(detail, 'error');
+      _lastUploadResult = null;
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    stopTicker();
+    phase = 'error';
+    zoneState('upload-error');
+    if (label) label.textContent = 'Click or drag & drop a book file';
+    _uppRender(panelId, 'error', null, 'Network error — upload failed', getElapsed());
+    toast('Network error — upload failed', 'error');
+    _lastUploadResult = null;
+  });
+
+  xhr.addEventListener('abort', () => {
+    stopTicker();
+    phase = 'error';
+    zoneState('');
+    _uppRender(panelId, 'error', null, 'Upload cancelled', getElapsed());
+    _lastUploadResult = null;
+  });
+
+  xhr.open('POST', API + '/api/upload');
+  xhr.send(form);
+}
+
+/**
+ * Wire drag-and-drop + click-to-pick events for an upload zone.
+ * @param {string} zoneId   - id of .upload-zone div
+ * @param {string} inputId  - id of hidden <input type="file"> inside the zone
+ * @param {string} panelId  - id of the .upload-progress-panel
+ * @param {string} labelId  - id of the text label inside the zone
+ */
+function _wireUploadZone(zoneId, inputId, panelId, labelId) {
+  const zone  = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  if (!zone || !input) return;
+
+  // Keyboard activation (Enter / Space on the zone div)
+  zone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+
+  // Click on zone → open file picker
+  zone.addEventListener('click', e => {
+    if (e.target === input) return;
+    input.click();
+  });
+
+  // File chosen via picker
+  input.addEventListener('change', () => {
+    if (input.files && input.files[0]) {
+      uploadFile(input.files[0], zoneId, panelId, labelId);
+      input.value = '';
+    }
+  });
+
+  // Drag events
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) uploadFile(file, zoneId, panelId, labelId);
+  });
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+
+function switchTab(id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${id}`));
+  // Show the compact sidebar upload section only when the Upload tab is active
+  const sidebarUpload = document.getElementById('upload-sidebar-section');
+  if (sidebarUpload) sidebarUpload.style.display = id === 'upload' ? '' : 'none';
+}
+
+// ─── Wire events ─────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    switchTab(btn.dataset.tab);
+    if (btn.dataset.tab === 'history') refreshHistory();
+    if (btn.dataset.tab === 'results') {
+      refreshOutputFiles();
+      if (activeJobId) refreshSkillFiles(activeJobId);
+    }
+  });
+});
+
+document.getElementById('process-btn').addEventListener('click', startProcessing);
+
+document.getElementById('cancel-job-btn').addEventListener('click', () => {
+  clearInterval(pollTimer);
+  _stopJobElapsedTicker();
+  activeJobId = null;
+  document.getElementById('job-status-card').style.display = 'none';
+  document.getElementById('process-btn').disabled = !selectedFile;
+  // Reset progress bar for next run
+  const fill = document.getElementById('job-progress-fill');
+  if (fill) {
+    fill.classList.remove('phase-done','phase-error');
+    fill.classList.add('indeterminate');
+    fill.style.width = '';
+  }
+  const elapsed = document.getElementById('job-elapsed');
+  if (elapsed) elapsed.textContent = '0s';
+});
+
+document.getElementById('dir-go-btn').addEventListener('click', () => {
+  const dir = document.getElementById('dir-input').value.trim();
+  if (dir) loadDirectory(dir);
+});
+document.getElementById('dir-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('dir-go-btn').click();
+});
+document.getElementById('dir-back-btn').addEventListener('click', () => {
+  if (parentDir) loadDirectory(parentDir);
+});
+document.getElementById('check-deps-btn').addEventListener('click', checkDeps);
+document.getElementById('refresh-output-btn').addEventListener('click', refreshOutputFiles);
+document.getElementById('refresh-history-btn').addEventListener('click', refreshHistory);
+document.getElementById('refresh-skill-btn').addEventListener('click', () => {
+  if (activeJobId) refreshSkillFiles(activeJobId);
+});
+
+// Wire the main (Upload tab) drop zone
+_wireUploadZone('upload-zone-main', 'upload-file-input-main', 'upp-main', 'upload-zone-main-label');
+// Wire the compact sidebar drop zone (no dedicated panel — reuse main panel if open)
+_wireUploadZone('upload-zone', 'upload-file-input', 'upp-main', 'upload-zone-label');
+
+// "Select & Go to Process" button — select the just-uploaded file and switch tabs
+document.getElementById('upload-select-btn').addEventListener('click', () => {
+  if (!_lastUploadResult) return;
+  selectedFile = { path: _lastUploadResult.path, name: _lastUploadResult.name, size: _lastUploadResult.size };
+  updateSelectedInfo();
+  document.getElementById('process-btn').disabled = false;
+  switchTab('process');
+  // Scroll process tab into view
+  const panel = document.getElementById('tab-process');
+  panel.scrollTop = 0;
+});
+
+// "Show in Browser" button — navigate sidebar to the input/ directory
+document.getElementById('upload-browse-btn').addEventListener('click', () => {
+  if (_lastUploadResult && _lastUploadResult.directory) {
+    loadDirectory(_lastUploadResult.directory);
+  }
+  switchTab('process');
+});
+
+// ─── updateSelectedInfo helper ───────────────────────────────────────────────
+function updateSelectedInfo() {
+  if (!selectedFile) return;
+  const info = document.getElementById('selected-info');
+  if (!info) return;
+  const ext = selectedFile.name ? ('.' + selectedFile.name.split('.').pop().toLowerCase()) : '';
+  info.innerHTML = `
+    <span id="selected-icon">${extIcon(ext)}</span>
+    <div id="selected-details">
+      <div id="selected-name">${selectedFile.name}</div>
+      <div id="selected-path">${selectedFile.path}</div>
+      <div id="selected-size">${fmtSize(selectedFile.size || 0)}</div>
+    </div>`;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+checkHealth();
+// Load input/ folder on startup via the API default
+apiFetch('/api/files').then(d => {
+  loadDirectory(d.directory);
+}).catch(() => {
+  loadDirectory(window.location.origin);  // fallback
+});
+</script>
+</body>
+</html>

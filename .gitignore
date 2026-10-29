@@ -1,0 +1,59 @@
+# ─── Environment & secrets ───────────────────────────────────────────────────
+.env
+*.env
+
+# ─── Python artifacts ────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dylib
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# ─── Input/Output content (sync folders but not their contents) ──────────────
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# ─── Cloned library (reproducible, not committed) ────────────────────────────
+book_to_skill_repo/
+
+# ─── Server runtime files ────────────────────────────────────────────────────
+server.log
+.server.pid
+
+# ─── Large binary/archive files ──────────────────────────────────────────────
+*.onnx
+*.onnx.data
+*.tgz
+*.tar.gz
+*.zip
+*.pdf
+*.epub
+*.mobi
+*.azw
+*.azw3
+
+# ─── IDE / OS ─────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# ─── Bob / Playwright ─────────────────────────────────────────────────────────
+.playwright-mcp/
+.bob/mcp.json
+AGENTS.md
+
+# ─── node_modules ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ─── Directories starting with underscore ────────────────────────────────────
+_*/
