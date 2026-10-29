@@ -43,11 +43,36 @@ from typing import List, Optional, Tuple
 logger = logging.getLogger("book_to_skill_app.skill_generator")
 
 # ─────────────────────────────── LLM config ───────────────────────────────────
+# Values are read lazily on every call via _cfg() so that editing .env while
+# the server is running takes effect immediately — no restart required.
 
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1")
-LLM_API_KEY  = os.environ.get("LLM_API_KEY",  "ollama")
-LLM_MODEL    = os.environ.get("LLM_MODEL",    "llama3.2:latest")
-LLM_TIMEOUT  = int(os.environ.get("LLM_TIMEOUT", "120"))
+from dataclasses import dataclass as _dataclass  # local alias avoids shadowing
+
+@_dataclass(frozen=True)
+class _LLMConfig:
+    base_url: str
+    api_key:  str
+    model:    str
+    timeout:  int
+
+
+def _cfg() -> _LLMConfig:
+    """Return the current LLM configuration, re-reading .env on every call.
+
+    Uses python-dotenv with override=True so values written to .env after
+    server startup are immediately visible to the next request without a
+    restart.  The .env file is located relative to this file's project root.
+    """
+    from dotenv import load_dotenv
+    from pathlib import Path as _Path
+    _env_path = _Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(_env_path, override=True)
+    return _LLMConfig(
+        base_url = os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
+        api_key  = os.environ.get("LLM_API_KEY",  "ollama"),
+        model    = os.environ.get("LLM_MODEL",    "llama3.2:latest"),
+        timeout  = int(os.environ.get("LLM_TIMEOUT", "120")),
+    )
 
 # ─────────────────────────────── Result dataclass ─────────────────────────────
 
@@ -92,13 +117,14 @@ def _llm_available() -> bool:
     import urllib.request
     import urllib.error
 
-    base = LLM_BASE_URL.rstrip("/")
+    cfg  = _cfg()
+    base = cfg.base_url.rstrip("/")
 
     # ── Step 1: confirm the server is up at all ────────────────────────────
     try:
         models_req = urllib.request.Request(
             f"{base}/models",
-            headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+            headers={"Authorization": f"Bearer {cfg.api_key}"},
             method="GET",
         )
         with urllib.request.urlopen(models_req, timeout=8):
@@ -110,7 +136,7 @@ def _llm_available() -> bool:
     # ── Step 2: confirm the configured model exists ────────────────────────
     try:
         payload = json.dumps({
-            "model":      LLM_MODEL,
+            "model":      cfg.model,
             "messages":   [{"role": "user", "content": "ping"}],
             "max_tokens": 1,
         }).encode()
@@ -119,7 +145,7 @@ def _llm_available() -> bool:
             data=payload,
             headers={
                 "Content-Type":  "application/json",
-                "Authorization": f"Bearer {LLM_API_KEY}",
+                "Authorization": f"Bearer {cfg.api_key}",
             },
             method="POST",
         )
@@ -131,7 +157,7 @@ def _llm_available() -> bool:
             logger.warning(
                 "LLM server is reachable but model %r was not found "
                 "(HTTP 404). Check LLM_MODEL in .env.  Server said: %s",
-                LLM_MODEL, body,
+                cfg.model, body,
             )
         else:
             logger.debug("LLM chat probe HTTP %d: %s", exc.code, body)
@@ -149,8 +175,9 @@ def _chat(system: str, user: str, max_tokens: int = 2000) -> str:
     import urllib.request
     import urllib.error
 
+    cfg = _cfg()
     payload = json.dumps({
-        "model": LLM_MODEL,
+        "model": cfg.model,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user",   "content": user},
@@ -160,15 +187,15 @@ def _chat(system: str, user: str, max_tokens: int = 2000) -> str:
     }).encode()
 
     req = urllib.request.Request(
-        f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+        f"{cfg.base_url.rstrip('/')}/chat/completions",
         data=payload,
         headers={
             "Content-Type":  "application/json",
-            "Authorization": f"Bearer {LLM_API_KEY}",
+            "Authorization": f"Bearer {cfg.api_key}",
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as resp:
+    with urllib.request.urlopen(req, timeout=cfg.timeout) as resp:
         body = json.load(resp)
 
     try:
@@ -503,7 +530,7 @@ def generate_skill(
 
     # ── Probe LLM ────────────────────────────────────────────────────────────
     result.llm_available = _llm_available()
-    logger.info("Skill generator: LLM available = %s (model=%s)", result.llm_available, LLM_MODEL)
+    logger.info("Skill generator: LLM available = %s (model=%s)", result.llm_available, _cfg().model)
 
     # ── Identify chapters ────────────────────────────────────────────────────
     headings_sample = metadata.get("chapter_headings_sample") or []

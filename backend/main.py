@@ -321,20 +321,24 @@ async def llm_status():
     """Probe the configured LLM endpoint and return availability.
 
     Runs the blocking probe in the thread pool so the event loop stays free.
+    LLM config is read fresh from .env on every call via _cfg(), so changes
+    to .env are reflected immediately without restarting the server.
+
     Response fields:
       available  – true | false
-      model      – LLM_MODEL env value
-      base_url   – LLM_BASE_URL env value (redacted key not included)
+      model      – current LLM_MODEL value
+      base_url   – current LLM_BASE_URL value (API key not included)
       checked_at – ISO-8601 UTC timestamp of this probe
     """
-    from backend.skill_generator import _llm_available, LLM_MODEL, LLM_BASE_URL
+    from backend.skill_generator import _llm_available, _cfg
 
     loop = asyncio.get_event_loop()
     available = await loop.run_in_executor(_thread_pool, _llm_available)
+    cfg = _cfg()   # read live values after the probe so they match what was used
     return {
         "available":  available,
-        "model":      LLM_MODEL,
-        "base_url":   LLM_BASE_URL,
+        "model":      cfg.model,
+        "base_url":   cfg.base_url,
         "checked_at": _now_iso(),
     }
 
